@@ -111,6 +111,9 @@ class Parser(object):
         except exceptions.IncompleteExpressionError as e:
             e.set_expression(expression)
             raise
+        except exceptions.InvalidValueError as e:
+            e.expression = expression
+            raise
         except exceptions.ParseError as e:
             e.expression = expression
             raise
@@ -228,6 +231,9 @@ class Parser(object):
         # Where start, end, and step are optional.
         # The last colon is optional as well.
         parts = [None, None, None]
+        # Keep the raw step token around so a zero step can be reported
+        # with its column position instead of a bare numeric value.
+        step_token = None
         index = 0
         current_token = self._current_token()
         while not current_token == 'rbracket' and index < 3:
@@ -238,13 +244,26 @@ class Parser(object):
                         self._lookahead_token(0), 'syntax error')
                 self._advance()
             elif current_token == 'number':
-                parts[index] = self._lookahead_token(0)['value']
+                token = self._lookahead_token(0)
+                parts[index] = token['value']
+                if index == 2:
+                    step_token = token
                 self._advance()
             else:
                 self._raise_parse_error_for_token(
                     self._lookahead_token(0), 'syntax error')
             current_token = self._current_token()
         self._match('rbracket')
+        if step_token is not None and step_token['value'] == 0:
+            # The JMESPath spec mandates an "invalid-value" error for a
+            # slice whose step is zero.  Intercepting it here, at the
+            # single point where every slice expression is constructed,
+            # means the error is raised before evaluation and always
+            # carries the offending expression's context.
+            raise exceptions.InvalidValueError(
+                step_token['start'], step_token['value'],
+                step_token['type'],
+                reason=exceptions.InvalidValueError._SLICE_ZERO_STEP)
         return ast.slice(*parts)
 
     def _token_nud_current(self, token):

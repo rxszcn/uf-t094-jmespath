@@ -1,7 +1,13 @@
 Next Release (TBD)
 ==================
 
-* No changes yet.
+* Add the spec defined ``InvalidValueError`` (the ``invalid-value``
+  error category) and raise it for slices with a zero step instead of
+  leaking the native ``ValueError``.  The error carries the offending
+  expression context and is reported with the same shape as parse
+  errors, consistently from both the parser and the evaluation layer
+  and across the ``jp`` command line entry point and the programming
+  API.
 
 
 1.1.0

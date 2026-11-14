@@ -1,5 +1,6 @@
 import operator
 
+from jmespath import exceptions
 from jmespath import functions
 from jmespath.compat import string_type
 from numbers import Number
@@ -218,8 +219,26 @@ class TreeInterpreter(Visitor):
     def visit_slice(self, node, value):
         if not isinstance(value, list):
             return None
-        s = slice(*node['children'])
-        return value[s]
+        start, end, step = node['children']
+        if step == 0:
+            # Defensive evaluation-time check mirroring the parser.
+            # AST nodes built through the documented parser path never
+            # reach this branch because zero steps are rejected up front;
+            # this keeps manually constructed/handed-in ASTs on the same
+            # error path instead of leaking a native ValueError.
+            reason = exceptions.InvalidValueError._SLICE_ZERO_STEP
+            raise exceptions.InvalidValueError(
+                lex_position=0, token_value=step, token_type='number',
+                reason=reason)
+        s = slice(start, end, step)
+        try:
+            return value[s]
+        except ValueError as e:
+            # Any native slicing failure must surface as a spec defined
+            # invalid-value error rather than as a language-level defect.
+            raise exceptions.InvalidValueError(
+                lex_position=0, token_value=step, token_type='number',
+                reason=str(e))
 
     def visit_key_val_pair(self, node, value):
         return self.visit(node['children'][0], value)

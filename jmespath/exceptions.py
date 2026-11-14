@@ -29,6 +29,42 @@ class ParseError(JMESPathError):
 
 
 @with_str_method
+class InvalidValueError(JMESPathError):
+    # Raised when a syntactically valid expression contains a value that
+    # is invalid according to the JMESPath spec, e.g. a slice with a
+    # step of zero.  This is distinct from ParseError, which is reserved
+    # for malformed expressions.
+    _ERROR_MESSAGE = 'Invalid jmespath expression'
+    _SLICE_ZERO_STEP = 'Slice step cannot be zero'
+
+    def __init__(self, lex_position, token_value, token_type,
+                 msg=_ERROR_MESSAGE, reason=None):
+        super(InvalidValueError, self).__init__(
+            lex_position, token_value, token_type)
+        self.lex_position = lex_position
+        self.token_value = token_value
+        self.token_type = token_type.upper()
+        self.msg = msg
+        self.reason = reason
+        # Whatever catches the InvalidValueError can fill in the full
+        # expression, mirroring how ParseError is handled by the parser.
+        self.expression = None
+
+    def __str__(self):
+        # self.lex_position +1 to account for the starting double quote char.
+        underline = ' ' * (self.lex_position + 1) + '^'
+        if self.reason is not None:
+            header = '%s: %s' % (self.msg, self.reason)
+        else:
+            header = self.msg
+        return (
+            '%s: Invalid value at column %s, '
+            'token "%s" (%s), for expression:\n"%s"\n%s' % (
+                header, self.lex_position, self.token_value, self.token_type,
+                self.expression, underline))
+
+
+@with_str_method
 class IncompleteExpressionError(ParseError):
     def set_expression(self, expression):
         self.expression = expression
